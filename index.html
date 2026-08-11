@@ -513,35 +513,48 @@
     if(e.dataTransfer.files && e.dataTransfer.files[0]) loadImageFile(e.dataTransfer.files[0]);
   });
 
-  // Pintura (Pointer Events: funciona igual para mouse, dedo y lapiz)
+  // Nucleo de pintura, comun para cualquier tipo de entrada
+  function paintDown(x, y){
+    painting = true;
+    pushUndo();
+    paintAt(x, y);
+  }
+  function paintMove(x, y){
+    if(!painting) return;
+    paintAt(x, y);
+  }
+  function paintUp(){
+    painting = false;
+  }
+
+  // Mouse y lapiz optico: usamos Pointer Events (dan el circulo guia del pincel)
   function handlePointerDown(e){
-    if(!hasImage) return;
+    if(!hasImage || e.pointerType === 'touch') return;
     try{
       e.preventDefault();
-      painting = true;
-      pushUndo();
-      const {x,y} = getCanvasCoords(e);
-      paintAt(x,y);
       try{ mainCanvas.setPointerCapture(e.pointerId); }catch(err){}
-      if(e.pointerType !== 'touch') brushCursor.style.display = 'block';
+      const {x,y} = getCanvasCoords(e);
+      paintDown(x,y);
+      brushCursor.style.display = 'block';
     }catch(err){
       showDebugToast('Error al pintar: ' + err.message);
     }
   }
   function handlePointerMove(e){
-    if(!hasImage) return;
-    if(e.pointerType !== 'touch') updateCursor(e);
+    if(!hasImage || e.pointerType === 'touch') return;
+    updateCursor(e);
     if(!painting) return;
     try{
       e.preventDefault();
       const {x,y} = getCanvasCoords(e);
-      paintAt(x,y);
+      paintMove(x,y);
     }catch(err){
       showDebugToast('Error al pintar: ' + err.message);
     }
   }
   function handlePointerUp(e){
-    painting = false;
+    if(e.pointerType === 'touch') return;
+    paintUp();
     if(e && e.pointerId !== undefined){
       try{ mainCanvas.releasePointerCapture(e.pointerId); }catch(err){}
     }
@@ -551,8 +564,39 @@
   mainCanvas.addEventListener('pointerdown', handlePointerDown);
   mainCanvas.addEventListener('pointermove', handlePointerMove);
   mainCanvas.addEventListener('pointerup', handlePointerUp);
-  mainCanvas.addEventListener('pointercancel', handlePointerUp);
+  mainCanvas.addEventListener('pointercancel', (e) => { if(e.pointerType !== 'touch') paintUp(); });
   mainCanvas.addEventListener('pointerleave', (e) => { if(e.pointerType !== 'touch') brushCursor.style.display = 'none'; });
+
+  // Dedo en pantalla tactil: manejo directo con Touch Events, no depende de Pointer Events
+  mainCanvas.addEventListener('touchstart', (e) => {
+    if(!hasImage) return;
+    try{
+      e.preventDefault();
+      const t = e.touches[0];
+      if(!t) return;
+      const {x,y} = getCanvasCoords(t);
+      paintDown(x,y);
+    }catch(err){
+      showDebugToast('Error tactil: ' + err.message);
+    }
+  }, {passive:false});
+
+  mainCanvas.addEventListener('touchmove', (e) => {
+    if(!hasImage || !painting) return;
+    try{
+      e.preventDefault();
+      const t = e.touches[0];
+      if(!t) return;
+      const {x,y} = getCanvasCoords(t);
+      paintMove(x,y);
+    }catch(err){
+      showDebugToast('Error tactil: ' + err.message);
+    }
+  }, {passive:false});
+
+  mainCanvas.addEventListener('touchend', (e) => { e.preventDefault(); paintUp(); }, {passive:false});
+  mainCanvas.addEventListener('touchcancel', () => { paintUp(); }, {passive:false});
+
 
   // Controles
   brushSizeInput.addEventListener('input', () => { brushValLabel.textContent = brushSizeInput.value; });
