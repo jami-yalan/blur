@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Difuminar zonas de una foto</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/heic2any/0.0.1/index.min.js"></script>
+<style>
+  :root{
+    --bg: #14161a;
+    --panel: #1c1f26;
+    --panel-2: #23262f;
+    --line: #31353f;
+    --text: #e9ebf0;
+    --muted: #8a90a0;
+    --accent: #6ee7c4;
+    --accent-dim: #3a4a45;
+    --danger: #e97b6b;
+  }
+  *{ box-sizing: border-box; }
+  body{
+    margin:0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    min-height: 100dvh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding: 24px 16px 60px;
+  }
+  h1{
+    font-size: 1.4rem;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    margin: 4px 0 2px;
+    text-align:center;
+  }
+  .subtitle{
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0 0 20px;
+    text-align:center;
+    max-width: 480px;
+  }
+  .accent-mark{ color: var(--accent); }
+
+  .app{
+    width: 100%;
+    max-width: 960px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px;
+  }
+
+  .toolbar{
+    display:flex;
+    flex-wrap:wrap;
+    gap: 14px;
+    align-items:center;
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .control{
+    display:flex;
+    flex-direction:column;
+    gap: 4px;
+    min-width: 120px;
+  }
+  .control label{
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+  }
+  .control .val{
+    color: var(--accent);
+    font-weight:600;
+  }
+  input[type="range"]{
+    accent-color: var(--accent);
+    width: 100%;
+  }
+
+  .mode-toggle{
+    display:flex;
+    background: var(--panel-2);
+    border-radius: 8px;
+    padding: 3px;
+    border: 1px solid var(--line);
+  }
+  .mode-toggle button{
+    border:none;
+    background:transparent;
+    color: var(--muted);
+    padding: 7px 14px;
+    font-size: 0.82rem;
+    border-radius: 6px;
+    cursor:pointer;
+    font-weight:600;
+  }
+  .mode-toggle button.active{
+    background: var(--accent-dim);
+    color: var(--accent);
+  }
+
+  .spacer{ flex:1; }
+
+  .buttons{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  button.action{
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    padding: 9px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    cursor:pointer;
+    font-weight:600;
+    transition: border-color 0.15s;
+  }
+  button.action:hover{ border-color: var(--accent); }
+  button.action:disabled{ opacity:0.35; cursor:not-allowed; }
+  button.primary{
+    background: var(--accent);
+    color: #0e1512;
+    border: none;
+  }
+  button.primary:hover{ opacity:0.9; border-color:transparent; }
+  button.danger:hover{ border-color: var(--danger); }
+
+  .stage{
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:
+      linear-gradient(45deg, #21242c 25%, transparent 25%),
+      linear-gradient(-45deg, #21242c 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #21242c 75%),
+      linear-gradient(-45deg, transparent 75%, #21242c 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    background-color: #191b20;
+    border-radius: 10px;
+    border: 1px dashed var(--line);
+    min-height: 340px;
+    overflow:hidden;
+    touch-action: none;
+  }
+  .stage.empty{ cursor: pointer; }
+  .dropzone-msg{
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform: translate(-50%,-50%);
+    width: 100%;
+    text-align:center;
+    color: var(--muted);
+    padding: 0 20px;
+    pointer-events:none;
+  }
+  .dropzone-msg .big{
+    font-size: 1rem;
+    color: var(--text);
+    margin-bottom: 6px;
+    font-weight:600;
+  }
+  canvas{
+    max-width: 100%;
+    height: auto;
+    display:block;
+    cursor: none;
+    touch-action: none;
+  }
+  #brushCursor{
+    position:absolute;
+    border-radius:50%;
+    border: 1.5px solid var(--accent);
+    background: rgba(110,231,196,0.12);
+    pointer-events:none;
+    transform: translate(-50%,-50%);
+    display:none;
+  }
+  #fileInput{ display:none; }
+
+  .hint{
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 12px;
+    text-align:center;
+  }
+  @media (max-width: 640px){
+    body{ padding: 16px 10px 40px; }
+    .app{ padding: 14px 12px; border-radius: 12px; }
+    .toolbar{
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+      padding-bottom: 14px;
+      margin-bottom: 14px;
+    }
+    .spacer{ display:none; }
+    .mode-toggle{ width: 100%; }
+    .mode-toggle button{ flex:1; padding: 10px 8px; font-size: 0.88rem; }
+    .control{ max-width: none !important; width: 100%; }
+    .control label{ display:flex; justify-content:space-between; }
+    .buttons{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .buttons button{ width: 100%; padding: 12px 10px; font-size: 0.88rem; }
+    #newImgBtn{ grid-column: 1 / -1; }
+    #downloadBtn{ grid-column: 1 / -1; }
+    .stage{ min-height: 260px; border-radius: 8px; }
+    .dropzone-msg{ padding: 0 16px; }
+  }
+
+  /* En pantallas tactiles el dedo ya es el cursor, no hace falta el circulo guia */
+  @media (hover: none) and (pointer: coarse){
+    #brushCursor{ display: none !important; }
+    canvas{ cursor: default; }
+  }
+</style>
+</head>
+<body>
+
+  <h1>Difumin<span class="accent-mark">a</span>dor de fotos</h1>
+  <p class="subtitle">Pinta con el pincel sobre cualquier parte de la imagen para difuminarla. No hace falta que sea el fondo, tu decides donde.</p>
+
+  <div class="app">
+    <div class="toolbar">
+      <div class="mode-toggle">
+        <button id="modeBlur" class="active">Difuminar</button>
+        <button id="modeRestore">Restaurar</button>
+      </div>
+
+      <div class="control" style="max-width:140px;">
+        <label>Tamano del pincel <span class="val" id="brushVal">40</span></label>
+        <input type="range" id="brushSize" min="8" max="150" value="40">
+      </div>
+
+      <div class="control" style="max-width:140px;">
+        <label>Intensidad <span class="val" id="blurVal">14</span></label>
+        <input type="range" id="blurStrength" min="2" max="40" value="14">
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="buttons">
+        <button class="action" id="undoBtn" disabled>Deshacer</button>
+        <button class="action danger" id="resetBtn" disabled>Reiniciar</button>
+        <button class="action" id="newImgBtn">Cambiar foto</button>
+        <button class="action primary" id="downloadBtn" disabled>Descargar</button>
+      </div>
+    </div>
+
+    <div class="stage empty" id="stage">
+      <div class="dropzone-msg" id="dropMsg">
+        <div class="big" id="dropMsgTitle">Arrastra una foto aqui</div>
+        <div id="dropMsgSubtitle">o haz clic para elegir un archivo (incluye fotos HEIC de iPhone)</div>
+      </div>
+      <canvas id="mainCanvas"></canvas>
+      <div id="brushCursor"></div>
+    </div>
+    <input type="file" id="fileInput" accept="image/*,.heic,.heif">
+  </div>
+
+  <p class="hint">La foto no se sube a ningun servidor, todo el proceso ocurre en tu navegador.</p>
+
+<script>
+(function(){
+  const stage = document.getElementById('stage');
+  const dropMsg = document.getElementById('dropMsg');
+  const dropMsgTitle = document.getElementById('dropMsgTitle');
+  const dropMsgSubtitle = document.getElementById('dropMsgSubtitle');
+  const fileInput = document.getElementById('fileInput');
+  const newImgBtn = document.getElementById('newImgBtn');
+  const mainCanvas = document.getElementById('mainCanvas');
+  const ctx = mainCanvas.getContext('2d');
+  const brushCursor = document.getElementById('brushCursor');
+
+  const brushSizeInput = document.getElementById('brushSize');
+  const brushValLabel = document.getElementById('brushVal');
+  const blurStrengthInput = document.getElementById('blurStrength');
+  const blurValLabel = document.getElementById('blurVal');
+
+  const modeBlurBtn = document.getElementById('modeBlur');
+  const modeRestoreBtn = document.getElementById('modeRestore');
+
+  const undoBtn = document.getElementById('undoBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+
+  let originalCanvas = document.createElement('canvas');
+  let originalCtx = originalCanvas.getContext('2d');
+  let blurCanvas = document.createElement('canvas');
+  let blurCtx = blurCanvas.getContext('2d');
+
+  let hasImage = false;
+  let mode = 'blur'; // 'blur' o 'restore'
+  let painting = false;
+  let undoStack = [];
+  let displayScale = 1;
+
+  function isHeic(file){
+    const name = (file.name || '').toLowerCase();
+    return file.type === 'image/heic' || file.type === 'image/heif' ||
+           name.endsWith('.heic') || name.endsWith('.heif');
+  }
+
+  function readAsImage(blobOrFile){
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => setupImage(img);
+      img.onerror = () => showLoadError('No se pudo abrir esa imagen. Prueba con otro archivo.');
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(blobOrFile);
+  }
+
+  function showLoadError(msg){
+    dropMsgTitle.textContent = 'Ups';
+    dropMsgSubtitle.textContent = msg;
+    dropMsg.style.display = 'block';
+  }
+
+  function loadImageFile(file){
+    if(!file) return;
+
+    if(isHeic(file)){
+      dropMsgTitle.textContent = 'Convirtiendo foto HEIC...';
+      dropMsgSubtitle.textContent = 'Esto puede tardar unos segundos';
+      dropMsg.style.display = 'block';
+      if(typeof heic2any !== 'function'){
+        showLoadError('No se pudo cargar el conversor HEIC. Revisa tu conexion e intenta de nuevo.');
+        return;
+      }
+      heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 })
+        .then((result) => {
+          const outBlob = Array.isArray(result) ? result[0] : result;
+          readAsImage(outBlob);
+        })
+        .catch(() => {
+          showLoadError('No se pudo convertir esta foto HEIC. Prueba exportandola como JPG desde el iPhone.');
+        });
+      return;
+    }
+
+    if(!file.type.startsWith('image/')){
+      showLoadError('Ese archivo no parece ser una imagen.');
+      return;
+    }
+    readAsImage(file);
+  }
+
+  function setupImage(img){
+    const MAX_DIM = 1600;
+    let w = img.naturalWidth, h = img.naturalHeight;
+    if(w > MAX_DIM || h > MAX_DIM){
+      const ratio = Math.min(MAX_DIM/w, MAX_DIM/h);
+      w = Math.round(w*ratio);
+      h = Math.round(h*ratio);
+    }
+    [mainCanvas, originalCanvas, blurCanvas].forEach(c => { c.width = w; c.height = h; });
+
+    originalCtx.clearRect(0,0,w,h);
+    originalCtx.drawImage(img, 0, 0, w, h);
+
+    ctx.clearRect(0,0,w,h);
+    ctx.drawImage(originalCanvas, 0, 0);
+
+    rebuildBlurLayer();
+
+    hasImage = true;
+    stage.classList.remove('empty');
+    dropMsg.style.display = 'none';
+    undoStack = [];
+    updateButtons();
+  }
+
+  function rebuildBlurLayer(){
+    const strength = parseInt(blurStrengthInput.value, 10);
+    blurCtx.clearRect(0,0,blurCanvas.width, blurCanvas.height);
+    blurCtx.filter = 'blur(' + strength + 'px)';
+    blurCtx.drawImage(originalCanvas, 0, 0);
+    blurCtx.filter = 'none';
+  }
+
+  function updateButtons(){
+    undoBtn.disabled = undoStack.length === 0;
+    resetBtn.disabled = !hasImage;
+    downloadBtn.disabled = !hasImage;
+  }
+
+  function pushUndo(){
+    if(undoStack.length > 25) undoStack.shift();
+    undoStack.push(ctx.getImageData(0,0,mainCanvas.width, mainCanvas.height));
+    updateButtons();
+  }
+
+  function undo(){
+    if(undoStack.length === 0) return;
+    const data = undoStack.pop();
+    ctx.putImageData(data, 0, 0);
+    updateButtons();
+  }
+
+  function resetAll(){
+    if(!hasImage) return;
+    pushUndo();
+    ctx.clearRect(0,0,mainCanvas.width, mainCanvas.height);
+    ctx.drawImage(originalCanvas, 0, 0);
+  }
+
+  function getCanvasCoords(evt){
+    const rect = mainCanvas.getBoundingClientRect();
+    displayScale = mainCanvas.width / rect.width;
+    return {
+      x: (evt.clientX - rect.left) * displayScale,
+      y: (evt.clientY - rect.top) * displayScale
+    };
+  }
+
+  function paintAt(x, y){
+    const r = parseInt(brushSizeInput.value, 10) * displayScale;
+    const sourceCanvas = mode === 'blur' ? blurCanvas : originalCanvas;
+
+    const temp = document.createElement('canvas');
+    temp.width = r*2;
+    temp.height = r*2;
+    const tctx = temp.getContext('2d');
+
+    tctx.drawImage(sourceCanvas, x-r, y-r, r*2, r*2, 0, 0, r*2, r*2);
+
+    const grad = tctx.createRadialGradient(r, r, r*0.55, r, r, r);
+    grad.addColorStop(0, 'rgba(0,0,0,1)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    tctx.globalCompositeOperation = 'destination-in';
+    tctx.fillStyle = grad;
+    tctx.beginPath();
+    tctx.arc(r, r, r, 0, Math.PI*2);
+    tctx.fill();
+
+    ctx.drawImage(temp, x-r, y-r);
+  }
+
+  function updateCursor(evt){
+    const rect = stage.getBoundingClientRect();
+    const size = parseInt(brushSizeInput.value, 10) * (mainCanvas.getBoundingClientRect().width / mainCanvas.width) * 2;
+    brushCursor.style.width = size + 'px';
+    brushCursor.style.height = size + 'px';
+    brushCursor.style.left = (evt.clientX - rect.left) + 'px';
+    brushCursor.style.top = (evt.clientY - rect.top) + 'px';
+  }
+
+  // Carga de imagen
+  stage.addEventListener('click', () => { if(!hasImage) fileInput.click(); });
+  newImgBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', (e) => loadImageFile(e.target.files[0]));
+
+  ['dragover','dragenter'].forEach(evt => {
+    stage.addEventListener(evt, (e) => { e.preventDefault(); stage.style.borderColor = '#6ee7c4'; });
+  });
+  ['dragleave','drop'].forEach(evt => {
+    stage.addEventListener(evt, (e) => { e.preventDefault(); stage.style.borderColor = ''; });
+  });
+  stage.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if(e.dataTransfer.files && e.dataTransfer.files[0]) loadImageFile(e.dataTransfer.files[0]);
+  });
+
+  // Pintura (Pointer Events: funciona igual para mouse, dedo y lapiz)
+  function handlePointerDown(e){
+    if(!hasImage) return;
+    e.preventDefault();
+    mainCanvas.setPointerCapture(e.pointerId);
+    painting = true;
+    pushUndo();
+    const {x,y} = getCanvasCoords(e);
+    paintAt(x,y);
+    if(e.pointerType !== 'touch') brushCursor.style.display = 'block';
+  }
+  function handlePointerMove(e){
+    if(!hasImage) return;
+    if(e.pointerType !== 'touch') updateCursor(e);
+    if(!painting) return;
+    e.preventDefault();
+    const {x,y} = getCanvasCoords(e);
+    paintAt(x,y);
+  }
+  function handlePointerUp(e){
+    painting = false;
+    if(e && e.pointerId !== undefined){
+      try{ mainCanvas.releasePointerCapture(e.pointerId); }catch(err){}
+    }
+    brushCursor.style.display = 'none';
+  }
+
+  mainCanvas.addEventListener('pointerdown', handlePointerDown);
+  mainCanvas.addEventListener('pointermove', handlePointerMove);
+  mainCanvas.addEventListener('pointerup', handlePointerUp);
+  mainCanvas.addEventListener('pointercancel', handlePointerUp);
+  mainCanvas.addEventListener('pointerleave', (e) => { if(e.pointerType !== 'touch') brushCursor.style.display = 'none'; });
+
+  // Controles
+  brushSizeInput.addEventListener('input', () => { brushValLabel.textContent = brushSizeInput.value; });
+  blurStrengthInput.addEventListener('input', () => {
+    blurValLabel.textContent = blurStrengthInput.value;
+    if(hasImage) rebuildBlurLayer();
+  });
+
+  modeBlurBtn.addEventListener('click', () => {
+    mode = 'blur';
+    modeBlurBtn.classList.add('active');
+    modeRestoreBtn.classList.remove('active');
+  });
+  modeRestoreBtn.addEventListener('click', () => {
+    mode = 'restore';
+    modeRestoreBtn.classList.add('active');
+    modeBlurBtn.classList.remove('active');
+  });
+
+  undoBtn.addEventListener('click', undo);
+  resetBtn.addEventListener('click', resetAll);
+
+  downloadBtn.addEventListener('click', () => {
+    if(!hasImage) return;
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = mainCanvas.width;
+    outCanvas.height = mainCanvas.height;
+    const outCtx = outCanvas.getContext('2d');
+    outCtx.fillStyle = '#ffffff';
+    outCtx.fillRect(0, 0, outCanvas.width, outCanvas.height);
+    outCtx.drawImage(mainCanvas, 0, 0);
+
+    const link = document.createElement('a');
+    link.download = 'foto-difuminada.jpg';
+    link.href = outCanvas.toDataURL('image/jpeg', 0.92);
+    link.click();
+  });
+
+})();
+</script>
+</body>
+</html>
