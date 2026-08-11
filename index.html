@@ -249,9 +249,9 @@
     .dropzone-msg{ padding: 0 16px; }
   }
 
-  /* En pantallas tactiles el dedo ya es el cursor, no hace falta el circulo guia */
+  /* En pantallas tactiles seguimos mostrando el circulo guia como referencia,
+     solo ajustamos el cursor nativo que no aplica al dedo */
   @media (hover: none) and (pointer: coarse){
-    #brushCursor{ display: none !important; }
     canvas{ cursor: default; }
   }
 </style>
@@ -300,7 +300,7 @@
   </div>
 
   <p class="hint">La foto no se sube a ningun servidor, todo el proceso ocurre en tu navegador.</p>
-  <p class="hint" style="opacity:0.4; font-size:0.68rem;">version 2026-08-11-3</p>
+  <p class="hint" style="opacity:0.4; font-size:0.68rem;">version 2026-08-11-5</p>
   <div id="debugToast"></div>
 
 <script>
@@ -425,10 +425,26 @@
 
   function rebuildBlurLayer(){
     const strength = parseInt(blurStrengthInput.value, 10);
-    blurCtx.clearRect(0,0,blurCanvas.width, blurCanvas.height);
-    blurCtx.filter = 'blur(' + strength + 'px)';
-    blurCtx.drawImage(originalCanvas, 0, 0);
-    blurCtx.filter = 'none';
+    const w = blurCanvas.width, h = blurCanvas.height;
+    blurCtx.clearRect(0, 0, w, h);
+
+    // Tecnica de reducir y volver a agrandar: no depende del filtro CSS de blur
+    // del navegador (que en iOS Safari puede no aplicarse), asi que funciona
+    // de forma identica en todos los dispositivos.
+    const scale = Math.max(0.02, 1 / (1 + strength * 0.8));
+    const smallW = Math.max(1, Math.round(w * scale));
+    const smallH = Math.max(1, Math.round(h * scale));
+
+    const small = document.createElement('canvas');
+    small.width = smallW;
+    small.height = smallH;
+    const sctx = small.getContext('2d');
+    sctx.imageSmoothingEnabled = true;
+    sctx.drawImage(originalCanvas, 0, 0, smallW, smallH);
+
+    blurCtx.imageSmoothingEnabled = true;
+    if('imageSmoothingQuality' in blurCtx) blurCtx.imageSmoothingQuality = 'high';
+    blurCtx.drawImage(small, 0, 0, w, h);
   }
 
   function updateButtons(){
@@ -575,6 +591,8 @@
       e.preventDefault();
       const t = e.touches[0];
       if(!t) return;
+      updateCursor(t);
+      brushCursor.style.display = 'block';
       const {x,y} = getCanvasCoords(t);
       paintDown(x,y);
     }catch(err){
@@ -583,11 +601,13 @@
   }, {passive:false});
 
   mainCanvas.addEventListener('touchmove', (e) => {
-    if(!hasImage || !painting) return;
+    if(!hasImage) return;
+    const t = e.touches[0];
+    if(!t) return;
+    updateCursor(t);
+    if(!painting) return;
     try{
       e.preventDefault();
-      const t = e.touches[0];
-      if(!t) return;
       const {x,y} = getCanvasCoords(t);
       paintMove(x,y);
     }catch(err){
@@ -596,11 +616,12 @@
   }, {passive:false});
 
   mainCanvas.addEventListener('touchend', (e) => {
+    brushCursor.style.display = 'none';
     if(!hasImage) return;
     e.preventDefault();
     paintUp();
   }, {passive:false});
-  mainCanvas.addEventListener('touchcancel', () => { paintUp(); }, {passive:false});
+  mainCanvas.addEventListener('touchcancel', () => { paintUp(); brushCursor.style.display = 'none'; }, {passive:false});
 
 
   // Controles
