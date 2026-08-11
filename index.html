@@ -300,6 +300,7 @@
   </div>
 
   <p class="hint">La foto no se sube a ningun servidor, todo el proceso ocurre en tu navegador.</p>
+  <p class="hint" style="opacity:0.4; font-size:0.68rem;">version 2026-08-11-3</p>
   <div id="debugToast"></div>
 
 <script>
@@ -594,7 +595,11 @@
     }
   }, {passive:false});
 
-  mainCanvas.addEventListener('touchend', (e) => { e.preventDefault(); paintUp(); }, {passive:false});
+  mainCanvas.addEventListener('touchend', (e) => {
+    if(!hasImage) return;
+    e.preventDefault();
+    paintUp();
+  }, {passive:false});
   mainCanvas.addEventListener('touchcancel', () => { paintUp(); }, {passive:false});
 
 
