@@ -482,11 +482,11 @@
   function handlePointerDown(e){
     if(!hasImage) return;
     e.preventDefault();
-    mainCanvas.setPointerCapture(e.pointerId);
     painting = true;
     pushUndo();
     const {x,y} = getCanvasCoords(e);
     paintAt(x,y);
+    try{ mainCanvas.setPointerCapture(e.pointerId); }catch(err){}
     if(e.pointerType !== 'touch') brushCursor.style.display = 'block';
   }
   function handlePointerMove(e){
